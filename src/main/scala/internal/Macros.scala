@@ -27,20 +27,28 @@ class Macros(val c: Context) {
       args.map(arg => varsof(arg).toSeq).flatten.toSet
   }
 
-  def compileClause(clause: Clause) = {
-    val name = TermName(c.freshName())
-    clause match {
+  def compileClause(clause: Clause, name: TypeName, pred: Option[TypeName], last: TypeName) = {
+    val statName = TermName(c.freshName())
+    val stat = clause match {
       case Clause(head, Seq()) =>
-        q"implicit val $name: $head = null"
+        q"implicit val $statName: $head = null"
       case Clause(head, terms) =>
-        val vars = varsof(head).map { case Term.Var(id) =>
+        val allvars =
+          (varsof(head) ++ terms.map(varsof(_).toSeq).flatten.toSet)
+        println(s"vars: $allvars")
+        val vars = allvars.map { case Term.Var(id) =>
           q"type ${TypeName(id)}"
         }
         val deps = terms.map { t =>
           val name = TermName(c.freshName())
           q"val $name: $t"
         }
-        q"implicit def $name[..$vars](implicit ..$deps): $head = null"
+        q"implicit def $statName[..$vars](implicit ..$deps): $head = null"
+    }
+    pred.map { parent =>
+      q"trait $name extends $parent { self: $last => $stat }"
+    }.getOrElse {
+      q"trait $name { self: $last => $stat }"
     }
   }
 
@@ -55,13 +63,20 @@ class Macros(val c: Context) {
     }.flatten.toMap
     val pre = defns.map { case (id, n) =>
       val targs = (1 to n).map { i =>
-        val name = TypeName("_" + n)
+        val name = TypeName("_" + i)
         q"type $name"
       }
       val name = TypeName(id)
       q"trait $name[..$targs]"
     }
-    pre ++ clauses.map(compileClause)
+    val names = clauses.map(_ => TypeName(c.freshName()))
+    val preds = None +: names.init.map(Some(_))
+
+    (pre ++ clauses.zip(names).zip(preds).map { case ((c, n), pred) =>
+      compileClause(c, n, pred, names.last)
+    }).toSeq :+ {
+      q"object module extends ${names.last}"
+    }
   }
 
   def typelog(code: String): Seq[Tree] = {
@@ -82,6 +97,9 @@ class Macros(val c: Context) {
 
   def ask[T: WeakTypeTag] = {
     val res = c.inferImplicitValue(weakTypeOf[T], silent = true)
-    q"${res.nonEmpty}"
+    if (res.nonEmpty)
+      q"{ $res; true }"
+    else
+      q"false"
   }
 }

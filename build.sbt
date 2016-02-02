@@ -11,3 +11,5 @@ resolvers += Resolver.sonatypeRepo("releases")
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
 incOptions in Test := incOptions.value.withNameHashing(false)
+
+scalacOptions in Test ++= Seq("-Xlog-implicits", "-Xprint:typer")

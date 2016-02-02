@@ -13,7 +13,10 @@ object Parsers {
   import api._
 
   lazy val int: P[Term.Int] =
-    P(CharIn('a' to 'z').rep(1).!).map(Term.Int)
+    P((CharIn('a' to 'z')
+      |CharIn('0' to '9')
+      |CharIn(Array('_'))
+      ).rep(1).!).map(Term.Int)
 
   lazy val ext: P[Term.Ext] =
     P("`" ~ CharPred(_ != '`').rep(1).! ~ "`").map(Term.Ext)
@@ -37,5 +40,5 @@ object Parsers {
     }
 
   lazy val clauses: P[Seq[Clause]] =
-    P(clause.rep)
+    P(clause.rep ~ End)
 }
